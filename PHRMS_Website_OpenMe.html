@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PHRMS – Patient Health Records</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --ink: #14262B;
+    --muted: #5B7076;
+    --teal: #0E5A5A;
+    --teal-dark: #0A4343;
+    --mist: #E9F0EE;
+    --paper: #FBFDFC;
+    --rule: #C5D5D1;
+    --alert: #B23A2E;
+    --ok: #1F7A4D;
+    font-family: "Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--mist); color: var(--ink); font-size: 15px; line-height: 1.5; }
+  button, input, select, textarea { font: inherit; color: inherit; }
+  :focus-visible { outline: 3px solid #5DB8B0; outline-offset: 2px; }
+
+  header { background: var(--teal); color: #fff; padding: 18px 24px; display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; }
+  header h1 { margin: 0; font-size: 22px; font-weight: 700; letter-spacing: -0.01em; }
+  header p { margin: 0; opacity: .8; font-size: 14px; }
+  header .count { margin-left: auto; font-weight: 600; }
+
+  main { display: grid; grid-template-columns: minmax(300px, 400px) 1fr; gap: 20px; padding: 20px 24px; max-width: 1200px; margin: 0 auto; }
+  @media (max-width: 820px) { main { grid-template-columns: 1fr; padding: 14px; } }
+
+  .panel { background: var(--paper); border: 1px solid var(--rule); border-radius: 10px; }
+  .panel h2 { margin: 0; font-size: 17px; padding: 16px 18px 0; }
+
+  /* list side */
+  .tools { padding: 14px 18px; display: flex; gap: 8px; flex-wrap: wrap; border-bottom: 1px solid var(--rule); }
+  .tools input { flex: 1 1 110px; min-width: 0; }
+  input, select, textarea { width: 100%; padding: 9px 11px; border: 1px solid var(--rule); border-radius: 6px; background: #fff; }
+  textarea { resize: vertical; min-height: 96px; }
+  .btn { border: 0; border-radius: 6px; padding: 9px 16px; cursor: pointer; font-weight: 600; background: var(--teal); color: #fff; }
+  .btn:hover { background: var(--teal-dark); }
+  .btn.ghost { background: transparent; color: var(--teal); border: 1px solid var(--teal); }
+  .btn.ghost:hover { background: var(--mist); }
+  .btn.danger { background: transparent; color: var(--alert); border: 1px solid var(--alert); }
+  .btn.danger:hover { background: #F8E7E4; }
+
+  ul#list { list-style: none; margin: 0; padding: 0; max-height: 62vh; overflow-y: auto; }
+  ul#list li { padding: 12px 18px; border-bottom: 1px solid var(--rule); cursor: pointer; display: grid; grid-template-columns: 56px 1fr auto; gap: 10px; align-items: center; }
+  ul#list li:hover { background: var(--mist); }
+  ul#list li.active { background: var(--mist); box-shadow: inset 4px 0 0 var(--teal); }
+  .pid { font-variant-numeric: tabular-nums; font-weight: 700; color: var(--teal); }
+  .pname { font-weight: 600; }
+  .psub { color: var(--muted); font-size: 13px; }
+  .blood { font-weight: 700; font-size: 13px; border: 1px solid var(--rule); border-radius: 4px; padding: 1px 7px; }
+  .empty { padding: 28px 18px; color: var(--muted); }
+
+  /* form side */
+  form { padding: 16px 18px 20px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 14px; }
+  form .full { grid-column: 1 / -1; }
+  @media (max-width: 520px) { form { grid-template-columns: 1fr; } }
+  label { display: block; font-weight: 600; font-size: 13px; margin-bottom: 4px; }
+  .actions { display: flex; gap: 10px; flex-wrap: wrap; }
+  .actions .spacer { flex: 1; }
+  #idHint { font-weight: 400; color: var(--muted); }
+
+  #toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); background: var(--ink); color: #fff; padding: 10px 18px; border-radius: 8px; opacity: 0; pointer-events: none; transition: opacity .2s; max-width: 90vw; }
+  #toast.show { opacity: 1; }
+  #toast.error { background: var(--alert); }
+  #toast.ok { background: var(--ok); }
+  @media (prefers-reduced-motion: reduce) { #toast { transition: none; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>PHRMS</h1>
+  <p>Patient Health Record Management System</p>
+  <span class="count" id="count"></span>
+</header>
+
+<main>
+  <section class="panel" aria-label="Patient list">
+    <h2>Patients</h2>
+    <div class="tools">
+      <input id="searchId" type="number" min="1" placeholder="Patient ID" aria-label="Search by patient ID">
+      <button class="btn" id="findBtn" type="button">Find</button>
+      <button class="btn ghost" id="newBtn" type="button">New patient</button>
+    </div>
+    <ul id="list"></ul>
+  </section>
+
+  <section class="panel" aria-label="Patient record">
+    <h2 id="formTitle">New patient</h2>
+    <form id="form">
+      <div>
+        <label for="id">Patient ID <span id="idHint"></span></label>
+        <input id="id" name="id" type="number" min="1" required>
+      </div>
+      <div>
+        <label for="date">Registered on</label>
+        <input id="date" name="date" type="date">
+      </div>
+      <div class="full">
+        <label for="name">Full name</label>
+        <input id="name" name="name" maxlength="40" required>
+      </div>
+      <div>
+        <label for="age">Age</label>
+        <input id="age" name="age" type="number" min="0" max="150" required>
+      </div>
+      <div>
+        <label for="gender">Gender</label>
+        <select id="gender" name="gender">
+          <option>Female</option><option>Male</option><option>Other</option>
+        </select>
+      </div>
+      <div>
+        <label for="blood">Blood group</label>
+        <select id="blood" name="blood">
+          <option>A+</option><option>A-</option><option>B+</option><option>B-</option>
+          <option>AB+</option><option>AB-</option><option>O+</option><option>O-</option>
+        </select>
+      </div>
+      <div>
+        <label for="phone">Phone</label>
+        <input id="phone" name="phone" type="tel" maxlength="15">
+      </div>
+      <div class="full">
+        <label for="diagnosis">Diagnosis and history</label>
+        <textarea id="diagnosis" name="diagnosis" maxlength="200"></textarea>
+      </div>
+      <div class="full actions">
+        <button class="btn" type="submit" id="saveBtn">Add patient</button>
+        <span class="spacer"></span>
+        <button class="btn danger" type="button" id="deleteBtn" hidden>Delete record</button>
+      </div>
+    </form>
+  </section>
+</main>
+
+<div id="toast" role="status" aria-live="polite"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+let patients = [];
+let selectedId = null;
+
+function toast(msg, kind) {
+  const t = $('toast');
+  t.textContent = msg;
+  t.className = 'show ' + (kind || '');
+  clearTimeout(toast.timer);
+  toast.timer = setTimeout(() => t.className = '', 2800);
+}
+
+// Standalone version: data is saved in this browser (localStorage), no Java needed.
+function dbLoad(){ try { return JSON.parse(localStorage.getItem('phrms') || '[]'); } catch(e){ return []; } }
+function dbSave(list){ list.sort((a,b)=>a.id-b.id); localStorage.setItem('phrms', JSON.stringify(list)); }
+function binarySearch(list, id){            // list is sorted by id
+  let lo = 0, hi = list.length - 1;
+  while (lo <= hi) {
+    const mid = Math.floor((lo + hi) / 2);
+    if (list[mid].id === id) return mid;
+    if (list[mid].id < id) lo = mid + 1; else hi = mid - 1;
+  }
+  return -1;
+}
+function readPatient(form, id){
+  const f = new URLSearchParams(form);
+  const p = { id: id ?? parseInt(f.get('id')), name:(f.get('name')||'').trim(), age: parseInt(f.get('age')),
+    gender:f.get('gender')||'', blood:f.get('blood')||'', phone:f.get('phone')||'', diagnosis:f.get('diagnosis')||'', date:f.get('date')||'' };
+  if (!(p.id > 0)) throw new Error('ID must be a positive number.');
+  if (!p.name) throw new Error('Name is required.');
+  if (isNaN(p.age) || p.age < 0 || p.age > 150) throw new Error('Age must be between 0 and 150.');
+  return p;
+}
+async function api(path, options) {
+  options = options || {};
+  const method = options.method || 'GET';
+  const list = dbLoad();
+  const m = path.match(/^\/api\/patients\/(\d+)$/);
+  if (path === '/api/patients') {
+    if (method === 'GET') return list;
+    const p = readPatient(options.body);
+    if (binarySearch(list, p.id) !== -1) throw new Error('A patient with ID ' + p.id + ' already exists.');
+    list.push(p); dbSave(list); return p;
+  }
+  if (!m) throw new Error('Invalid ID.');
+  const id = parseInt(m[1]);
+  const i = binarySearch(list, id);
+  if (i === -1) throw new Error('No patient with ID ' + id + '.');
+  if (method === 'GET') return list[i];
+  if (method === 'PUT') { const p = readPatient(options.body, id); list[i] = p; dbSave(list); return p; }
+  if (method === 'DELETE') { list.splice(i, 1); dbSave(list); return { deleted: id }; }
+}
+
+const asForm = obj => new URLSearchParams(obj).toString();
+const formHeaders = { 'Content-Type': 'application/x-www-form-urlencoded' };
+
+async function loadList() {
+  patients = await api('/api/patients');
+  renderList(patients);
+}
+
+function renderList(rows) {
+  $('count').textContent = patients.length + (patients.length === 1 ? ' record' : ' records');
+  const ul = $('list');
+  ul.innerHTML = '';
+  if (!rows.length) {
+    ul.innerHTML = '<li class="empty">No patients yet. Fill in the form and choose Add patient.</li>';
+    return;
+  }
+  rows.forEach(p => {
+    const li = document.createElement('li');
+    if (p.id === selectedId) li.className = 'active';
+    li.innerHTML =
+      '<span class="pid">#' + p.id + '</span>' +
+      '<span><span class="pname"></span><br><span class="psub"></span></span>' +
+      '<span class="blood"></span>';
+    li.querySelector('.pname').textContent = p.name;
+    li.querySelector('.psub').textContent = p.age + ' yrs, ' + p.gender;
+    li.querySelector('.blood').textContent = p.blood;
+    li.addEventListener('click', () => selectPatient(p));
+    ul.appendChild(li);
+  });
+}
+
+function fillForm(p) {
+  $('id').value = p.id;
+  $('name').value = p.name;
+  $('age').value = p.age;
+  $('gender').value = p.gender || 'Female';
+  $('blood').value = p.blood || 'A+';
+  $('phone').value = p.phone;
+  $('diagnosis').value = p.diagnosis;
+  $('date').value = p.date;
+}
+
+function selectPatient(p) {
+  selectedId = p.id;
+  fillForm(p);
+  $('id').readOnly = true;
+  $('idHint').textContent = '(cannot be changed)';
+  $('formTitle').textContent = 'Record #' + p.id;
+  $('saveBtn').textContent = 'Save changes';
+  $('deleteBtn').hidden = false;
+  renderList(patients);
+}
+
+function newPatient() {
+  selectedId = null;
+  $('form').reset();
+  $('date').value = new Date().toISOString().slice(0, 10);
+  $('id').readOnly = false;
+  $('idHint').textContent = '';
+  $('formTitle').textContent = 'New patient';
+  $('saveBtn').textContent = 'Add patient';
+  $('deleteBtn').hidden = true;
+  renderList(patients);
+}
+
+$('newBtn').addEventListener('click', newPatient);
+
+$('findBtn').addEventListener('click', async () => {
+  const id = $('searchId').value.trim();
+  if (!id) { renderList(patients); return; }
+  try {
+    const p = await api('/api/patients/' + encodeURIComponent(id));   // binary search on the server
+    renderList([p]);
+    selectPatient(p);
+    renderList([p]);
+  } catch (e) {
+    toast(e.message, 'error');
+  }
+});
+$('searchId').addEventListener('keydown', e => { if (e.key === 'Enter') $('findBtn').click(); });
+$('searchId').addEventListener('input', e => { if (!e.target.value) renderList(patients); });
+
+$('form').addEventListener('submit', async e => {
+  e.preventDefault();
+  const body = asForm(Object.fromEntries(new FormData($('form'))));
+  try {
+    let saved;
+    if (selectedId === null) {
+      saved = await api('/api/patients', { method: 'POST', headers: formHeaders, body });
+      toast('Patient added', 'ok');
+    } else {
+      saved = await api('/api/patients/' + selectedId, { method: 'PUT', headers: formHeaders, body });
+      toast('Changes saved', 'ok');
+    }
+    await loadList();
+    selectPatient(saved);
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+});
+
+$('deleteBtn').addEventListener('click', async () => {
+  if (selectedId === null) return;
+  if (!confirm('Delete record #' + selectedId + '? This cannot be undone.')) return;
+  try {
+    await api('/api/patients/' + selectedId, { method: 'DELETE' });
+    toast('Record deleted', 'ok');
+    await loadList();
+    newPatient();
+  } catch (err) {
+    toast(err.message, 'error');
+  }
+});
+
+newPatient();
+loadList().catch(err => toast(err.message, 'error'));
+</script>
+</body>
+</html>
